@@ -1,0 +1,25 @@
+{
+  "name": "postforge",
+  "version": "0.1.0",
+  "description": "A desktop blog editor with local API server",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server/index.ts",
+    "app": "cd desktop && npm start",
+    "app:build": "cd desktop && npm run build"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "glob": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/cors": "^2.8.0",
+    "@types/express": "^5.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

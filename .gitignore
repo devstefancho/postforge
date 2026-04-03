@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+.env
+desktop/node_modules/
+desktop/dist/
+*.db
+*.sqlite3
+.DS_Store

@@ -1,0 +1,231 @@
+const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
+const { readFileSync, writeFileSync, mkdirSync, existsSync } = require('node:fs');
+const { join, dirname } = require('node:path');
+const { spawn } = require('node:child_process');
+
+// ──────────────────────────────────────
+// Config (API URL + Token)
+// ──────────────────────────────────────
+
+const CONFIG_PATH = join(app.getPath('userData'), 'config.json');
+
+function loadConfig() {
+  const defaults = {
+    activeEnv: 'local',
+    envs: {
+      local: { apiBaseUrl: 'http://localhost:8788', apiToken: '' },
+      production: { apiBaseUrl: '', apiToken: '' },
+    },
+  };
+  try {
+    if (existsSync(CONFIG_PATH)) {
+      const saved = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+      if (!saved.envs) {
+        return {
+          activeEnv: 'local',
+          envs: {
+            local: defaults.envs.local,
+            production: { apiBaseUrl: saved.apiBaseUrl || '', apiToken: saved.apiToken || '' },
+          },
+        };
+      }
+      return { ...defaults, ...saved };
+    }
+  } catch {}
+  return defaults;
+}
+
+function saveConfig(config) {
+  mkdirSync(dirname(CONFIG_PATH), { recursive: true });
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+// ──────────────────────────────────────
+// Electron App
+// ──────────────────────────────────────
+
+let mainWindow;
+
+function createMenu() {
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Post',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => mainWindow?.webContents.send('menu-new-post'),
+        },
+        {
+          label: 'Open Post',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => mainWindow?.webContents.send('menu-open-post'),
+        },
+        {
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => mainWindow?.webContents.send('menu-save'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Dashboard',
+          accelerator: 'CmdOrCtrl+D',
+          click: () => mainWindow?.webContents.send('menu-dashboard'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Settings...',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => mainWindow?.webContents.send('menu-settings'),
+        },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { role: 'resetZoom' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+      ],
+    },
+  ];
+
+  if (process.platform === 'darwin') {
+    template.unshift({
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    });
+  }
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+async function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    title: 'PostForge',
+    titleBarStyle: 'hiddenInset',
+    webPreferences: {
+      preload: join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  mainWindow.loadFile(join(__dirname, 'editor.html'));
+  createMenu();
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+// IPC handlers
+ipcMain.on('set-title', (_, title) => {
+  if (mainWindow) mainWindow.setTitle(title);
+});
+
+ipcMain.handle('get-config', () => {
+  return loadConfig();
+});
+
+ipcMain.handle('save-config', (_, config) => {
+  const current = loadConfig();
+  const updated = { ...current, ...config };
+  saveConfig(updated);
+  return updated;
+});
+
+ipcMain.handle('show-image-dialog', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] }],
+    title: 'Select Image',
+  });
+
+  if (result.canceled || !result.filePaths[0]) return null;
+
+  const filePath = result.filePaths[0];
+  const data = readFileSync(filePath);
+  const ext = filePath.split('.').pop();
+  const filename = `image-${Date.now()}.${ext}`;
+
+  return {
+    filename,
+    data: data.toString('base64'),
+    originalPath: filePath,
+  };
+});
+
+// ──────────────────────────────────────
+// Local API Server (Express via tsx)
+// ──────────────────────────────────────
+
+const PROJECT_ROOT = join(__dirname, '..');
+let serverProcess = null;
+
+function startLocalServer() {
+  serverProcess = spawn('npx', ['tsx', 'server/index.ts'], {
+    cwd: PROJECT_ROOT,
+    stdio: 'ignore',
+    shell: true,
+  });
+
+  serverProcess.on('error', () => { serverProcess = null; });
+  serverProcess.on('exit', () => { serverProcess = null; });
+}
+
+function stopLocalServer() {
+  if (serverProcess) {
+    serverProcess.kill();
+    serverProcess = null;
+  }
+}
+
+// App lifecycle
+app.whenReady().then(() => {
+  startLocalServer();
+  createWindow();
+});
+
+app.on('window-all-closed', () => {
+  stopLocalServer();
+  app.quit();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});

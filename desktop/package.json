@@ -1,0 +1,27 @@
+{
+  "name": "postforge",
+  "version": "1.0.0",
+  "description": "PostForge - Desktop blog post editor",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.devstefancho.postforge",
+    "productName": "PostForge",
+    "mac": {
+      "target": "dir",
+      "identity": null
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "editor.html"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}

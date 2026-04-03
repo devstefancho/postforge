@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PostForge</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --success: #3fb950;
+    --error: #f85149;
+    --input-bg: #0d1117;
+    --tag-bg: #1f6feb33;
+    --tag-text: #58a6ff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding-top: 38px;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  .titlebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 38px;
+    -webkit-app-region: drag;
+    z-index: 100;
+  }
+
+  /* ── View system ── */
+  [data-view] { display: none; height: calc(100vh - 38px); }
+  [data-view].view-active { display: flex; }
+
+  /* ── Dashboard ── */
+  .dashboard-layout {
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+
+  .dashboard-sidebar {
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    -webkit-app-region: no-drag;
+  }
+
+  .sidebar-logo {
+    font-size: 20px;
+    font-weight: 700;
+    padding: 20px 20px 24px;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+  }
+
+  .nav-item:hover { background: var(--bg); color: var(--text); }
+  .nav-item.active { background: var(--tag-bg); color: var(--accent); font-weight: 500; }
+
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .dashboard-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    -webkit-app-region: no-drag;
+  }
+
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 16px;
+  }
+
+  .search-input {
+    flex: 1;
+    max-width: 480px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-muted); }
+
+  .post-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .post-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .post-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+  .post-card-image {
+    height: 160px;
+    background-size: cover;
+    background-position: center;
+    background-color: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .post-card-image svg { opacity: 0.15; }
+
+  .post-card-body { padding: 16px; }
+
+  .post-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .category-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .category-badge.blog { background: var(--tag-bg); color: var(--tag-text); }
+  .category-badge.thoughts { background: #8b5cf633; color: #a78bfa; }
+
+  .badge-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .badge-published { background: #23863633; color: var(--success); }
+  .badge-draft { background: #da363333; color: var(--error); }
+
+  .post-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .post-card-date {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+
+  .empty-state svg { margin-bottom: 16px; opacity: 0.3; }
+  .empty-state p { font-size: 14px; }
+
+  .post-count {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  /* ── Editor view ── */
+  #editorView { flex-direction: column; overflow-y: auto; }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px;
+    width: 100%;
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+
+  header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-right: 8px;
+  }
+
+  .status.success { color: var(--success); }
+  .status.error { color: var(--error); }
+
+  .editing-status {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* Form fields */
+  .field { margin-bottom: 16px; }
+
+  .field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .field input, .field select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* Tags */
+  .tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    border-radius: 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .tag .remove { font-size: 14px; line-height: 1; opacity: 0.7; }
+  .tag .remove:hover { opacity: 1; }
+
+  .tag-suggestions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+  .tag-suggestion {
+    padding: 2px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .tag-suggestion:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Editor */
+  .editor-wrapper {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .editor-tabs {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .editor-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+
+  .editor-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .editor-tab:hover { color: var(--text); }
+
+  #editor {
+    width: 100%;
+    min-height: 500px;
+    padding: 16px;
+    background: var(--input-bg);
+    border: none;
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    resize: vertical;
+    outline: none;
+    tab-size: 2;
+  }
+
+  #preview { display: none; min-height: 500px; padding: 16px 24px; background: var(--input-bg); font-size: 15px; line-height: 1.8; overflow-y: auto; }
+
+  /* Shared markdown body styles */
+  .markdown-body h1 { font-size: 1.8em; margin: 0.8em 0 0.4em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  .markdown-body h2 { font-size: 1.4em; margin: 0.8em 0 0.4em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+  .markdown-body h3 { font-size: 1.2em; margin: 0.6em 0 0.3em; }
+  .markdown-body p { margin: 0.6em 0; }
+  .markdown-body code { background: var(--surface); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  .markdown-body pre { background: var(--surface); padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 0.8em 0; }
+  .markdown-body pre code { background: none; padding: 0; }
+  .markdown-body blockquote { border-left: 3px solid var(--accent); padding-left: 16px; color: var(--text-muted); margin: 0.8em 0; }
+  .markdown-body ul, .markdown-body ol { padding-left: 24px; margin: 0.6em 0; }
+  .markdown-body li { margin: 0.3em 0; }
+  .markdown-body a { color: var(--accent); text-decoration: none; }
+  .markdown-body a:hover { text-decoration: underline; }
+  .markdown-body img { max-width: 100%; border-radius: 8px; margin: 0.6em 0; }
+  .markdown-body table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+  .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+  .markdown-body th { background: var(--surface); }
+  .markdown-body strong { font-weight: 600; }
+  .markdown-body em { font-style: italic; }
+  .markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+
+  /* Drop zone */
+  .drop-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(88, 166, 255, 0.1);
+    border: 3px dashed var(--accent);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: var(--accent);
+  }
+
+  .drop-overlay.active { display: flex; }
+
+  /* Hero image */
+  .hero-upload { display: flex; align-items: center; gap: 12px; }
+  .hero-upload input[type="file"] { display: none; }
+
+  .hero-upload-btn {
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .hero-upload-btn:hover { border-color: var(--accent); }
+  .hero-preview { font-size: 13px; color: var(--text-muted); }
+
+  /* Buttons */
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+  .btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-primary { background: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); }
+  .btn-danger { color: var(--error); border-color: var(--error); }
+  .btn-danger:hover { background: #f8514922; }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { background: var(--accent-hover); }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 400px;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+
+  .modal h2 { font-size: 16px; margin-bottom: 16px; }
+
+  .modal-close {
+    float: right;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .post-list-item {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .post-list-item:hover { border-color: var(--accent); background: var(--input-bg); }
+  .post-list-item .post-slug { color: var(--accent); font-weight: 500; }
+  .post-list-item .post-title { color: var(--text-muted); margin-top: 2px; font-size: 12px; }
+
+  .modal-tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+
+  .modal-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+  }
+
+  .modal-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .modal-tab:hover { color: var(--text); }
+
+  .env-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .env-badge.local { background: #1f6feb33; color: #58a6ff; }
+  .env-badge.production { background: #f8514933; color: #f85149; }
+
+  .draft-status {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    margin-left: 6px;
+  }
+
+  /* ── Read-only view ── */
+  #readonlyView { flex-direction: column; overflow-y: auto; }
+
+  .readonly-container {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px;
+    width: 100%;
+  }
+
+  .readonly-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .readonly-header-actions { display: flex; gap: 8px; }
+
+  .readonly-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .readonly-title {
+    font-size: 2em;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 8px;
+  }
+
+  .readonly-description {
+    font-size: 15px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+
+  .readonly-hero {
+    margin-bottom: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .readonly-hero img {
+    width: 100%;
+    display: block;
+  }
+
+  .readonly-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+
+  .readonly-content {
+    font-size: 15px;
+    line-height: 1.8;
+  }
+
+  .readonly-date {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* Loading spinner */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: var(--text-muted);
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-right: 10px;
+  }
+
+  /* Confirm dialog */
+  .confirm-dialog {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 360px;
+  }
+
+  .confirm-dialog h3 { font-size: 16px; margin-bottom: 12px; }
+  .confirm-dialog p { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+  .confirm-dialog .actions { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<div class="titlebar"></div>
+
+<!-- ══════════════ DASHBOARD VIEW ══════════════ -->
+<div data-view="dashboard" id="dashboardView">
+  <div class="dashboard-layout">
+    <aside class="dashboard-sidebar">
+      <div class="sidebar-logo">PostForge</div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-filter="all" onclick="setFilter('all')">
+          <span class="nav-icon">&#9638;</span> All Posts
+        </button>
+        <button class="nav-item" data-filter="drafts" onclick="setFilter('drafts')">
+          <span class="nav-icon">&#9998;</span> Drafts
+        </button>
+        <button class="nav-item" data-filter="published" onclick="setFilter('published')">
+          <span class="nav-icon">&#10003;</span> Published
+        </button>
+        <button class="nav-item" data-filter="settings" onclick="showSettingsDialog()">
+          <span class="nav-icon">&#9881;</span> Settings
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="env-badge" id="dashboardEnvBadge" onclick="showSettingsDialog()"></span>
+      </div>
+    </aside>
+    <main class="dashboard-main">
+      <div class="dashboard-header">
+        <input type="text" class="search-input" id="dashboardSearch" placeholder="Search posts..." oninput="filterPostsBySearch()">
+        <button class="btn btn-accent btn-sm" onclick="newPostFromDashboard()">+ Create New Post</button>
+      </div>
+      <div class="post-count" id="postCount"></div>
+      <div class="post-grid" id="postGrid"></div>
+    </main>
+  </div>
+</div>
+
+<!-- ══════════════ EDITOR VIEW ══════════════ -->
+<div data-view="editor" id="editorView">
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">&#8592; Dashboard</button>
+        <h1>PostForge <span class="env-badge" id="envBadge" onclick="showSettingsDialog()"></span>
+          <span class="editing-status badge-status" id="editingStatus" style="display:none"></span>
+        </h1>
+      </div>
+      <div class="header-right">
+        <span class="status" id="status"></span>
+        <button class="btn btn-secondary btn-sm" onclick="newPost()">New</button>
+        <button class="btn btn-secondary btn-sm" id="loadBtn" onclick="showLoadDialog()">Load</button>
+        <button class="btn btn-secondary btn-sm" id="draftBtn" onclick="savePost(true)">Save Draft</button>
+        <button class="btn btn-primary btn-sm" id="publishBtn" onclick="savePost(false)">Publish</button>
+      </div>
+    </header>
+
+    <div class="row">
+      <div class="field">
+        <label for="title">Title</label>
+        <input type="text" id="title" placeholder="Post title">
+      </div>
+      <div class="field">
+        <label for="slug">Slug</label>
+        <input type="text" id="slug" placeholder="my-post-slug">
+      </div>
+    </div>
+
+    <div class="row-3">
+      <div class="field">
+        <label for="category">Category</label>
+        <select id="category">
+          <option value="blog">Blog</option>
+          <option value="thoughts">Signal</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="description">Description</label>
+        <input type="text" id="description" placeholder="1~2 sentence summary">
+      </div>
+      <div class="field">
+        <label>Hero Image</label>
+        <div class="hero-upload">
+          <button class="hero-upload-btn" onclick="document.getElementById('heroFile').click()">Choose File</button>
+          <input type="file" id="heroFile" accept="image/*">
+          <span class="hero-preview" id="heroPreview">None</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="tagsInput">Tags</label>
+      <input type="text" id="tagsInput" placeholder="Type tag and press Enter">
+      <div class="tags-container" id="tagsContainer"></div>
+      <div class="tag-suggestions" id="tagSuggestions"></div>
+    </div>
+
+    <div class="editor-wrapper">
+      <div class="editor-tabs">
+        <button class="editor-tab active" data-tab="edit">Edit</button>
+        <button class="editor-tab" data-tab="preview">Preview</button>
+      </div>
+      <textarea id="editor" placeholder="Write your post in markdown..."></textarea>
+      <div id="preview" class="markdown-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ READONLY VIEW ══════════════ -->
+<div data-view="readonly" id="readonlyView">
+  <div class="readonly-container">
+    <div class="readonly-header">
+      <button class="btn btn-secondary btn-sm" onclick="showView('dashboard')">&#8592; Dashboard</button>
+      <div class="readonly-header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="editCurrentPost()">Edit</button>
+        <button class="btn btn-secondary btn-sm btn-danger" onclick="deleteCurrentPost()">Delete</button>
+      </div>
+    </div>
+    <div class="readonly-meta" id="readonlyMeta"></div>
+    <h1 class="readonly-title" id="readonlyTitle"></h1>
+    <p class="readonly-description" id="readonlyDescription"></p>
+    <div class="readonly-hero" id="readonlyHero"></div>
+    <div class="readonly-tags" id="readonlyTags"></div>
+    <div class="readonly-content markdown-body" id="readonlyContent"></div>
+  </div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay">Drop image here</div>
+
+<!-- Load dialog modal -->
+<div class="modal-overlay" id="loadModal">
+  <div class="modal">
+    <button class="modal-close" onclick="hideLoadDialog()">&times;</button>
+    <div class="modal-tabs">
+      <button class="modal-tab active" onclick="switchLoadTab('posts')">Posts</button>
+      <button class="modal-tab" onclick="switchLoadTab('drafts')">Drafts</button>
+    </div>
+    <div id="postList">Loading...</div>
+    <div id="draftList" style="display:none">Loading...</div>
+  </div>
+</div>
+
+<!-- Confirm dialog modal -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="confirm-dialog">
+    <h3 id="confirmTitle"></h3>
+    <p id="confirmMessage"></p>
+    <div class="actions">
+      <button class="btn btn-secondary btn-sm" onclick="hideConfirm()">Cancel</button>
+      <button class="btn btn-secondary btn-sm btn-danger" id="confirmAction">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ══════════════════════════════════════
+  // State
+  // ══════════════════════════════════════
+  let currentView = 'dashboard';
+  let currentFilter = 'all';
+  let currentPost = null;
+  let editingIsDraft = false;
+  let allDashboardPosts = [];
+  let tags = [];
+  let allTags = [];
+  let heroFileName = '';
+  let API_BASE = '';
+  let API_TOKEN = '';
+  let activeEnv = 'local';
+  let envConfigs = {};
+  const STORAGE_KEY = 'blog-editor-draft';
+
+  // ══════════════════════════════════════
+  // View Navigation
+  // ══════════════════════════════════════
+  function showView(name) {
+    currentView = name;
+    document.querySelectorAll('[data-view]').forEach(v => v.classList.remove('view-active'));
+    const target = document.getElementById(name === 'dashboard' ? 'dashboardView' : name === 'editor' ? 'editorView' : 'readonlyView');
+    if (target) target.classList.add('view-active');
+
+    if (name === 'dashboard') {
+      loadDashboardPosts();
+      if (window.electronAPI) window.electronAPI.setTitle('PostForge');
+    }
+  }
+
+  // ══════════════════════════════════════
+  // Dashboard
+  // ══════════════════════════════════════
+  function updateAllEnvBadges() {
+    ['envBadge', 'dashboardEnvBadge'].forEach(id => {
+      const badge = document.getElementById(id);
+      if (badge) {
+        badge.textContent = activeEnv === 'local' ? 'LOCAL' : 'PROD';
+        badge.className = 'env-badge ' + activeEnv;
+      }
+    });
+  }
+
+  function setFilter(filter) {
+    if (filter === 'settings') return;
+    currentFilter = filter;
+    document.querySelectorAll('.nav-item[data-filter]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    renderPostGrid();
+  }
+
+  async function loadDashboardPosts() {
+    const grid = document.getElementById('postGrid');
+    grid.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+
+    try {
+      const res = await apiFetch('/api/posts?drafts=true');
+      const data = await res.json();
+      allDashboardPosts = data.posts || [];
+      renderPostGrid();
+    } catch (e) {
+      grid.innerHTML = `<div class="empty-state"><p>Failed to load posts: ${escapeHtml(e.message)}</p></div>`;
+    }
+  }
+
+  function getFilteredPosts() {
+    let posts = allDashboardPosts;
+    if (currentFilter === 'drafts') {
+      posts = posts.filter(p => p.is_draft === 1);
+    } else if (currentFilter === 'published') {
+      posts = posts.filter(p => p.is_draft !== 1);
+    }
+
+    const query = document.getElementById('dashboardSearch').value.trim().toLowerCase();
+    if (query) {
+      posts = posts.filter(p =>
+        (p.title || '').toLowerCase().includes(query) ||
+        (p.slug || '').toLowerCase().includes(query) ||
+        (p.description || '').toLowerCase().includes(query)
+      );
+    }
+    return posts;
+  }
+
+  function renderPostGrid() {
+    const posts = getFilteredPosts();
+    const grid = document.getElementById('postGrid');
+    const countEl = document.getElementById('postCount');
+
+    const filterLabel = currentFilter === 'all' ? 'All Posts' : currentFilter === 'drafts' ? 'Drafts' : 'Published';
+    countEl.textContent = `${filterLabel} (${posts.length})`;
+
+    if (posts.length === 0) {
+      grid.innerHTML = `<div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <p>No posts found</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = posts.map(p => {
+      const heroUrl = p.hero_image ? `${API_BASE}/api/images/${p.hero_image}` : '';
+      const isDraft = p.is_draft === 1;
+      const date = p.pub_date ? new Date(p.pub_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+      const categoryLabel = p.category === 'thoughts' ? 'Signal' : 'Blog';
+      const placeholderSvg = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+        <polyline points="21 15 16 10 5 21"></polyline>
+      </svg>`;
+
+      return `<div class="post-card" onclick="openReadonly('${escapeHtml(p.slug)}')">
+        <div class="post-card-image" ${heroUrl ? `style="background-image:url('${heroUrl}')"` : ''}>
+          ${heroUrl ? '' : placeholderSvg}
+        </div>
+        <div class="post-card-body">
+          <div class="post-card-meta">
+            <span class="category-badge ${p.category || 'blog'}">${categoryLabel}</span>
+            <span class="badge-status ${isDraft ? 'badge-draft' : 'badge-published'}">${isDraft ? 'Draft' : 'Published'}</span>
+          </div>
+          <div class="post-card-title">${escapeHtml(p.title || '(Untitled)')}</div>
+          <div class="post-card-date">${date}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function filterPostsBySearch() {
+    renderPostGrid();
+  }
+
+  function newPostFromDashboard() {
+    newPost();
+    showView('editor');
+  }
+
+  // ══════════════════════════════════════
+  // Read-only View
+  // ══════════════════════════════════════
+  async function openReadonly(slug) {
+    showView('readonly');
+    const container = document.querySelector('.readonly-container');
+    document.getElementById('readonlyTitle').textContent = 'Loading...';
+    document.getElementById('readonlyDescription').textContent = '';
+    document.getElementById('readonlyContent').innerHTML = '';
+    document.getElementById('readonlyMeta').innerHTML = '';
+    document.getElementById('readonlyHero').innerHTML = '';
+    document.getElementById('readonlyTags').innerHTML = '';
+
+    try {
+      const res = await apiFetch(`/api/posts/${slug}`);
+      const data = await res.json();
+      if (!data.post) {
+        document.getElementById('readonlyTitle').textContent = 'Post not found';
+        return;
+      }
+
+      currentPost = data.post;
+      const post = data.post;
+      const isDraft = post.is_draft === 1;
+      const categoryLabel = post.category === 'thoughts' ? 'Signal' : 'Blog';
+      const date = post.pub_date ? new Date(post.pub_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+
+      document.getElementById('readonlyMeta').innerHTML = `
+        <span class="category-badge ${post.category || 'blog'}">${categoryLabel}</span>
+        <span class="badge-status ${isDraft ? 'badge-draft' : 'badge-published'}">${isDraft ? 'Draft' : 'Published'}</span>
+        <span class="readonly-date">${date}</span>
+      `;
+      document.getElementById('readonlyTitle').textContent = post.title || '(Untitled)';
+      document.getElementById('readonlyDescription').textContent = post.description || '';
+
+      if (post.hero_image) {
+        document.getElementById('readonlyHero').innerHTML = `<img src="${API_BASE}/api/images/${post.hero_image}" alt="Hero image">`;
+      } else {
+        document.getElementById('readonlyHero').innerHTML = '';
+      }
+
+      const postTags = post.tags || [];
+      document.getElementById('readonlyTags').innerHTML = postTags.map(t =>
+        `<span class="tag">${escapeHtml(t)}</span>`
+      ).join('');
+
+      document.getElementById('readonlyContent').innerHTML = renderMarkdown(post.content || '');
+
+      if (window.electronAPI) {
+        window.electronAPI.setTitle(`PostForge — ${post.title || post.slug}`);
+      }
+    } catch (e) {
+      document.getElementById('readonlyTitle').textContent = 'Failed to load post';
+      document.getElementById('readonlyDescription').textContent = e.message;
+    }
+  }
+
+  function editCurrentPost() {
+    if (!currentPost) return;
+    const post = currentPost;
+
+    document.getElementById('title').value = post.title || '';
+    document.getElementById('slug').value = post.slug;
+    document.getElementById('description').value = post.description || '';
+    document.getElementById('category').value = post.category || 'blog';
+
+    tags = post.tags || [];
+    renderTags();
+    renderTagSuggestions();
+
+    if (post.hero_image) {
+      heroFileName = post.hero_image.split('/').pop();
+      document.getElementById('heroPreview').textContent = heroFileName;
+    } else {
+      heroFileName = '';
+      document.getElementById('heroPreview').textContent = 'None';
+    }
+
+    document.getElementById('editor').value = post.content || '';
+    editingIsDraft = post.is_draft === 1;
+    updateEditingStatus();
+    autosave();
+    showView('editor');
+
+    if (window.electronAPI) {
+      window.electronAPI.setTitle(`PostForge — ${post.slug}`);
+    }
+  }
+
+  function deleteCurrentPost() {
+    if (!currentPost) return;
+    showConfirm(
+      'Delete Post',
+      `"${currentPost.title || currentPost.slug}" will be permanently deleted.`,
+      async () => {
+        try {
+          await apiFetch(`/api/posts/${currentPost.slug}`, { method: 'DELETE' });
+          currentPost = null;
+          showView('dashboard');
+        } catch (e) {
+          alert('Delete failed: ' + e.message);
+        }
+      }
+    );
+  }
+
+  // ══════════════════════════════════════
+  // Confirm dialog
+  // ══════════════════════════════════════
+  let confirmCallback = null;
+
+  function showConfirm(title, message, onConfirm) {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMessage').textContent = message;
+    confirmCallback = onConfirm;
+    document.getElementById('confirmAction').onclick = async () => {
+      hideConfirm();
+      if (confirmCallback) await confirmCallback();
+    };
+    document.getElementById('confirmModal').classList.add('active');
+  }
+
+  function hideConfirm() {
+    document.getElementById('confirmModal').classList.remove('active');
+    confirmCallback = null;
+  }
+
+  document.getElementById('confirmModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) hideConfirm();
+  });
+
+  // ══════════════════════════════════════
+  // Editor - Editing status indicator
+  // ══════════════════════════════════════
+  function updateEditingStatus() {
+    const el = document.getElementById('editingStatus');
+    if (editingIsDraft) {
+      el.textContent = 'Draft';
+      el.className = 'editing-status badge-status badge-draft';
+      el.style.display = 'inline-block';
+    } else if (currentPost) {
+      el.textContent = 'Published';
+      el.className = 'editing-status badge-status badge-published';
+      el.style.display = 'inline-block';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  // ══════════════════════════════════════
+  // API helper
+  // ══════════════════════════════════════
+  async function apiFetch(path, options = {}) {
+    const headers = { ...options.headers };
+    if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
+    if (options.body && typeof options.body === 'string') headers['Content-Type'] = 'application/json';
+    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    return res;
+  }
+
+  // ══════════════════════════════════════
+  // Auto-save to localStorage (debounced)
+  // ══════════════════════════════════════
+  let saveTimer;
+  function autosave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const draft = {
+        title: document.getElementById('title').value,
+        slug: document.getElementById('slug').value,
+        description: document.getElementById('description').value,
+        category: document.getElementById('category').value,
+        tags: tags,
+        heroFileName: heroFileName,
+        content: document.getElementById('editor').value,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    }, 500);
+  }
+
+  function restoreDraft() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+    try {
+      const draft = JSON.parse(saved);
+      if (draft.title) document.getElementById('title').value = draft.title;
+      if (draft.slug) document.getElementById('slug').value = draft.slug;
+      if (draft.description) document.getElementById('description').value = draft.description;
+      if (draft.category) document.getElementById('category').value = draft.category;
+      if (draft.tags && draft.tags.length) { tags = draft.tags; renderTags(); }
+      if (draft.heroFileName) { heroFileName = draft.heroFileName; document.getElementById('heroPreview').textContent = heroFileName; }
+      if (draft.content) document.getElementById('editor').value = draft.content;
+    } catch (e) { /* ignore */ }
+  }
+
+  function clearDraft() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  // ══════════════════════════════════════
+  // Init
+  // ══════════════════════════════════════
+  (async function init() {
+    if (window.electronAPI) {
+      const config = await window.electronAPI.getConfig();
+      activeEnv = config.activeEnv || 'local';
+      envConfigs = config.envs || {};
+      const env = envConfigs[activeEnv] || {};
+      API_BASE = env.apiBaseUrl || '';
+      API_TOKEN = env.apiToken || '';
+      updateAllEnvBadges();
+    }
+
+    if (!API_BASE) {
+      showView('dashboard');
+      return;
+    }
+
+    // Load tags in background
+    try {
+      const res = await apiFetch('/api/posts/tags');
+      const data = await res.json();
+      allTags = data.tags || [];
+      renderTagSuggestions();
+    } catch (e) {
+      console.warn('Failed to load tags:', e);
+    }
+
+    // Restore draft to editor fields (but don't switch to editor)
+    restoreDraft();
+
+    // Show dashboard as default
+    showView('dashboard');
+  })();
+
+  // Autosave listeners
+  ['title', 'slug', 'description', 'category'].forEach(id => {
+    document.getElementById(id).addEventListener('input', autosave);
+  });
+  document.getElementById('editor').addEventListener('input', autosave);
+
+  // ══════════════════════════════════════
+  // Tags
+  // ══════════════════════════════════════
+  const tagsInput = document.getElementById('tagsInput');
+  const tagsContainer = document.getElementById('tagsContainer');
+  const tagSuggestions = document.getElementById('tagSuggestions');
+
+  tagsInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = tagsInput.value.trim().toLowerCase();
+      if (val && !tags.includes(val)) {
+        tags.push(val);
+        renderTags();
+        renderTagSuggestions();
+      }
+      tagsInput.value = '';
+    }
+  });
+
+  function removeTag(tag) { tags = tags.filter(t => t !== tag); renderTags(); renderTagSuggestions(); autosave(); }
+  function addTag(tag) { if (!tags.includes(tag)) { tags.push(tag); renderTags(); renderTagSuggestions(); autosave(); } }
+
+  function renderTags() {
+    tagsContainer.innerHTML = tags.map(t =>
+      `<span class="tag">${t}<span class="remove" onclick="removeTag('${t}')">&times;</span></span>`
+    ).join('');
+  }
+
+  function renderTagSuggestions() {
+    const available = allTags.filter(t => !tags.includes(t));
+    tagSuggestions.innerHTML = available.slice(0, 15).map(t =>
+      `<span class="tag-suggestion" onclick="addTag('${t}')">${t}</span>`
+    ).join('');
+  }
+
+  // ══════════════════════════════════════
+  // Editor tabs
+  // ══════════════════════════════════════
+  const editorEl = document.getElementById('editor');
+  const previewEl = document.getElementById('preview');
+
+  document.querySelectorAll('.editor-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.editor-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      if (tab.dataset.tab === 'preview') {
+        editorEl.style.display = 'none';
+        previewEl.style.display = 'block';
+        previewEl.innerHTML = renderMarkdown(editorEl.value);
+      } else {
+        editorEl.style.display = 'block';
+        previewEl.style.display = 'none';
+      }
+    });
+  });
+
+  editorEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = editorEl.selectionStart;
+      const end = editorEl.selectionEnd;
+      editorEl.value = editorEl.value.substring(0, start) + '  ' + editorEl.value.substring(end);
+      editorEl.selectionStart = editorEl.selectionEnd = start + 2;
+    }
+  });
+
+  // ══════════════════════════════════════
+  // Markdown renderer
+  // ══════════════════════════════════════
+  function renderMarkdown(md) {
+    let html = md
+      .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+        `<pre><code>${escapeHtml(code.trim())}</code></pre>`)
+      .replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
+        const heads = header.split('|').filter(Boolean).map(h => `<th>${h.trim()}</th>`).join('');
+        const rows = body.trim().split('\n').map(row => {
+          const cells = row.split('|').filter(Boolean).map(c => `<td>${c.trim()}</td>`).join('');
+          return `<tr>${cells}</tr>`;
+        }).join('');
+        return `<table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table>`;
+      })
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+      .replace(/^---$/gm, '<hr>')
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      .replace(/\n\n/g, '</p><p>');
+
+    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+    return `<p>${html}</p>`;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ══════════════════════════════════════
+  // Hero image upload
+  // ══════════════════════════════════════
+  const heroFile = document.getElementById('heroFile');
+  const heroPreview = document.getElementById('heroPreview');
+
+  heroFile.addEventListener('change', async () => {
+    const file = heroFile.files[0];
+    if (!file) return;
+
+    const slug = document.getElementById('slug').value.trim();
+    if (!slug) { setStatus('error', 'Enter slug first'); return; }
+
+    const ext = file.name.split('.').pop();
+    heroFileName = `hero.${ext}`;
+
+    const base64 = await fileToBase64(file);
+    try {
+      const res = await apiFetch('/api/images/upload', {
+        method: 'POST',
+        body: JSON.stringify({ slug, filename: heroFileName, data: base64 }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        heroPreview.textContent = heroFileName;
+        setStatus('success', 'Hero image uploaded');
+      } else {
+        setStatus('error', data.error);
+      }
+    } catch (e) {
+      setStatus('error', 'Upload failed: ' + e.message);
+    }
+  });
+
+  // ══════════════════════════════════════
+  // Drag & drop images
+  // ══════════════════════════════════════
+  const dropOverlay = document.getElementById('dropOverlay');
+  let dragCounter = 0;
+
+  document.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragCounter++;
+    if (e.dataTransfer.types.includes('Files') && currentView === 'editor') {
+      dropOverlay.classList.add('active');
+    }
+  });
+
+  document.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter === 0) dropOverlay.classList.remove('active');
+  });
+
+  document.addEventListener('dragover', (e) => e.preventDefault());
+
+  document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dragCounter = 0;
+    dropOverlay.classList.remove('active');
+
+    if (currentView !== 'editor') return;
+
+    const slug = document.getElementById('slug').value.trim();
+    if (!slug) { setStatus('error', 'Enter slug first'); return; }
+
+    for (const file of e.dataTransfer.files) {
+      if (!file.type.startsWith('image/')) continue;
+
+      const filename = file.name.replace(/\s+/g, '-').toLowerCase();
+      const base64 = await fileToBase64(file);
+
+      try {
+        const res = await apiFetch('/api/images/upload', {
+          method: 'POST',
+          body: JSON.stringify({ slug, filename, data: base64 }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          insertAtCursor(`![${filename}](./${filename})`);
+          setStatus('success', `${filename} uploaded`);
+        }
+      } catch (err) {
+        setStatus('error', `${filename} upload failed`);
+      }
+    }
+  });
+
+  function insertAtCursor(text) {
+    const pos = editorEl.selectionStart;
+    const before = editorEl.value.substring(0, pos);
+    const after = editorEl.value.substring(editorEl.selectionEnd);
+    editorEl.value = before + '\n' + text + '\n' + after;
+    editorEl.selectionStart = editorEl.selectionEnd = pos + text.length + 2;
+    editorEl.focus();
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ══════════════════════════════════════
+  // Save post (with isDraft support)
+  // ══════════════════════════════════════
+  async function savePost(isDraft = false) {
+    const slug = document.getElementById('slug').value.trim();
+    const title = document.getElementById('title').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const category = document.getElementById('category').value;
+    const content = editorEl.value;
+
+    if (!slug) { setStatus('error', 'Enter slug'); return; }
+    if (!title) { setStatus('error', 'Enter title'); return; }
+    if (!content.trim()) { setStatus('error', 'Enter content'); return; }
+
+    const draftBtn = document.getElementById('draftBtn');
+    const publishBtn = document.getElementById('publishBtn');
+    draftBtn.disabled = true;
+    publishBtn.disabled = true;
+    (isDraft ? draftBtn : publishBtn).textContent = 'Saving...';
+
+    try {
+      const heroImage = heroFileName ? `posts/${slug}/${heroFileName}` : '';
+      const res = await apiFetch('/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          slug, title, description, category, tags,
+          heroImage, content, isDraft: isDraft ? 1 : 0,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        clearDraft();
+        editingIsDraft = isDraft;
+        updateEditingStatus();
+        const action = isDraft ? 'Draft saved' : 'Published';
+        setStatus('success', `${action}! ${slug} (${data.isNew ? 'new' : 'updated'})`);
+      } else {
+        setStatus('error', data.error);
+      }
+    } catch (e) {
+      setStatus('error', 'Save failed: ' + e.message);
+    } finally {
+      draftBtn.disabled = false;
+      publishBtn.disabled = false;
+      draftBtn.textContent = 'Save Draft';
+      publishBtn.textContent = 'Publish';
+    }
+  }
+
+  // ══════════════════════════════════════
+  // Load dialog
+  // ══════════════════════════════════════
+  async function showLoadDialog() {
+    const modal = document.getElementById('loadModal');
+    const postList = document.getElementById('postList');
+    modal.classList.add('active');
+    postList.innerHTML = 'Loading...';
+
+    try {
+      const res = await apiFetch('/api/posts');
+      const data = await res.json();
+      if (!data.posts || data.posts.length === 0) {
+        postList.innerHTML = '<p style="color:var(--text-muted)">No posts</p>';
+        return;
+      }
+      postList.innerHTML = data.posts.map(p =>
+        `<div class="post-list-item" onclick="loadPostInEditor('${p.slug}')">
+          <div class="post-slug">${p.slug}</div>
+          <div class="post-title">${p.title || '(Untitled)'} · ${p.category}</div>
+        </div>`
+      ).join('');
+    } catch (e) {
+      postList.innerHTML = '<p style="color:var(--error)">Failed to load</p>';
+    }
+  }
+
+  function hideLoadDialog() {
+    document.getElementById('loadModal').classList.remove('active');
+  }
+
+  async function loadPostInEditor(slug) {
+    hideLoadDialog();
+    try {
+      const res = await apiFetch(`/api/posts/${slug}`);
+      const data = await res.json();
+      if (!data.post) { setStatus('error', 'Cannot load post'); return; }
+
+      const post = data.post;
+      currentPost = post;
+      document.getElementById('title').value = post.title || '';
+      document.getElementById('slug').value = post.slug;
+      document.getElementById('description').value = post.description || '';
+      document.getElementById('category').value = post.category || 'blog';
+
+      tags = post.tags || [];
+      renderTags();
+      renderTagSuggestions();
+
+      if (post.hero_image) {
+        heroFileName = post.hero_image.split('/').pop();
+        document.getElementById('heroPreview').textContent = heroFileName;
+      } else {
+        heroFileName = '';
+        document.getElementById('heroPreview').textContent = 'None';
+      }
+
+      document.getElementById('editor').value = post.content || '';
+      editingIsDraft = post.is_draft === 1;
+      updateEditingStatus();
+      autosave();
+      setStatus('success', `Loaded: ${slug}`);
+    } catch (e) {
+      setStatus('error', 'Load failed: ' + e.message);
+    }
+  }
+
+  function switchLoadTab(tab) {
+    document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.modal-tab[onclick*="${tab}"]`).classList.add('active');
+    document.getElementById('postList').style.display = tab === 'posts' ? 'block' : 'none';
+    document.getElementById('draftList').style.display = tab === 'drafts' ? 'block' : 'none';
+    if (tab === 'drafts') loadDrafts();
+  }
+
+  async function loadDrafts() {
+    const draftList = document.getElementById('draftList');
+    draftList.innerHTML = 'Loading...';
+    try {
+      const res = await apiFetch('/api/posts?drafts=true');
+      const data = await res.json();
+      const drafts = (data.posts || []).filter(p => p.isDraft || p.is_draft === 1);
+      if (drafts.length === 0) {
+        draftList.innerHTML = '<p style="color:var(--text-muted)">No drafts</p>';
+        return;
+      }
+      draftList.innerHTML = drafts.map(d =>
+        `<div class="post-list-item" onclick="loadPostInEditor('${d.slug}')">
+          <div class="post-slug">${escapeHtml(d.title)}<span class="draft-status">draft</span></div>
+          <div class="post-title">${d.slug}</div>
+        </div>`
+      ).join('');
+    } catch (e) {
+      draftList.innerHTML = '<p style="color:var(--error)">Failed to load drafts</p>';
+    }
+  }
+
+  document.getElementById('loadModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) hideLoadDialog();
+  });
+
+  // ══════════════════════════════════════
+  // New Post
+  // ══════════════════════════════════════
+  function newPost() {
+    clearDraft();
+    currentPost = null;
+    editingIsDraft = false;
+    document.getElementById('title').value = '';
+    document.getElementById('slug').value = '';
+    document.getElementById('description').value = '';
+    document.getElementById('category').value = 'blog';
+    document.getElementById('editor').value = '';
+    tags = [];
+    heroFileName = '';
+    renderTags();
+    renderTagSuggestions();
+    document.getElementById('heroPreview').textContent = 'None';
+    updateEditingStatus();
+    setStatus('', '');
+    // Reset to Edit tab
+    document.querySelectorAll('.editor-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.editor-tab[data-tab="edit"]').classList.add('active');
+    editorEl.style.display = 'block';
+    previewEl.style.display = 'none';
+  }
+
+  function setStatus(type, message) {
+    const el = document.getElementById('status');
+    el.className = `status ${type}`;
+    el.textContent = message;
+    if (type === 'success') {
+      setTimeout(() => { el.textContent = ''; el.className = 'status'; }, 5000);
+    }
+  }
+
+  // ══════════════════════════════════════
+  // Electron native integration
+  // ══════════════════════════════════════
+  if (window.electronAPI) {
+    window.electronAPI.onMenuNewPost(() => {
+      newPost();
+      showView('editor');
+    });
+
+    window.electronAPI.onMenuSave(() => {
+      if (currentView === 'editor') savePost(editingIsDraft);
+    });
+
+    window.electronAPI.onMenuOpenPost(() => {
+      if (currentView === 'editor') showLoadDialog();
+    });
+
+    window.electronAPI.onMenuSettings(() => showSettingsDialog());
+
+    window.electronAPI.onMenuDashboard(() => showView('dashboard'));
+
+    document.getElementById('slug').addEventListener('input', () => {
+      const slug = document.getElementById('slug').value.trim();
+      if (slug) window.electronAPI.setTitle(`PostForge — ${slug}`);
+    });
+
+    const heroUploadBtn = document.querySelector('.hero-upload-btn');
+    heroUploadBtn.onclick = async (e) => {
+      e.preventDefault();
+      const slug = document.getElementById('slug').value.trim();
+      if (!slug) { setStatus('error', 'Enter slug first'); return; }
+
+      const result = await window.electronAPI.showImageDialog();
+      if (!result) return;
+
+      const ext = result.filename.split('.').pop();
+      heroFileName = `hero.${ext}`;
+
+      try {
+        const res = await apiFetch('/api/images/upload', {
+          method: 'POST',
+          body: JSON.stringify({ slug, filename: heroFileName, data: result.data }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          heroPreview.textContent = heroFileName;
+          setStatus('success', 'Hero image uploaded');
+          autosave();
+        } else {
+          setStatus('error', data.error);
+        }
+      } catch (err) {
+        setStatus('error', 'Upload failed: ' + err.message);
+      }
+    };
+  }
+
+  // ══════════════════════════════════════
+  // Settings dialog
+  // ══════════════════════════════════════
+  function showSettingsDialog() {
+    let overlay = document.getElementById('settingsModal');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'settingsModal';
+      overlay.className = 'modal-overlay active';
+      overlay.innerHTML = `
+        <div class="modal">
+          <button class="modal-close" onclick="document.getElementById('settingsModal').classList.remove('active')">&times;</button>
+          <h2>Settings</h2>
+          <div class="field">
+            <label>Environment</label>
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+              <button id="envBtnLocal" class="btn" onclick="switchEnvTab('local')">Local</button>
+              <button id="envBtnProduction" class="btn" onclick="switchEnvTab('production')">Production</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="settingsApiUrl">API Base URL</label>
+            <input type="text" id="settingsApiUrl">
+          </div>
+          <div class="field">
+            <label for="settingsApiToken">API Token</label>
+            <input type="password" id="settingsApiToken">
+          </div>
+          <div class="actions" style="margin-top: 16px">
+            <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('active'); });
+    }
+    updateEnvTabUI();
+    overlay.classList.add('active');
+  }
+
+  function switchEnvTab(env) {
+    const url = document.getElementById('settingsApiUrl').value.trim().replace(/\/$/, '');
+    const token = document.getElementById('settingsApiToken').value.trim();
+    if (envConfigs[activeEnv]) {
+      envConfigs[activeEnv] = { apiBaseUrl: url, apiToken: token };
+    }
+    activeEnv = env;
+    updateEnvTabUI();
+  }
+
+  function updateEnvTabUI() {
+    const env = envConfigs[activeEnv] || {};
+    document.getElementById('settingsApiUrl').value = env.apiBaseUrl || '';
+    document.getElementById('settingsApiToken').value = env.apiToken || '';
+    const localBtn = document.getElementById('envBtnLocal');
+    const prodBtn = document.getElementById('envBtnProduction');
+    if (localBtn && prodBtn) {
+      localBtn.className = activeEnv === 'local' ? 'btn btn-primary' : 'btn';
+      prodBtn.className = activeEnv === 'production' ? 'btn btn-primary' : 'btn';
+    }
+  }
+
+  async function saveSettings() {
+    const url = document.getElementById('settingsApiUrl').value.trim().replace(/\/$/, '');
+    const token = document.getElementById('settingsApiToken').value.trim();
+    envConfigs[activeEnv] = { apiBaseUrl: url, apiToken: token };
+    const env = envConfigs[activeEnv];
+    API_BASE = env.apiBaseUrl;
+    API_TOKEN = env.apiToken;
+    if (window.electronAPI) {
+      await window.electronAPI.saveConfig({ activeEnv, envs: envConfigs });
+    }
+    updateAllEnvBadges();
+    document.getElementById('settingsModal').classList.remove('active');
+    setStatus('success', `Settings saved (${activeEnv})`);
+    if (currentView === 'dashboard') loadDashboardPosts();
+  }
+</script>
+</body>
+</html>
