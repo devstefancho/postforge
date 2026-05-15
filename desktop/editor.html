@@ -488,6 +488,28 @@
 
   .modal h2 { font-size: 16px; margin-bottom: 16px; }
 
+  /* Proofread modal — wider than default, with diff view */
+  .proofread-modal { width: min(880px, 90vw); max-height: 80vh; }
+  .proofread-modal .muted { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+  .proofread-modal .error-msg { color: var(--error); margin-bottom: 16px; }
+  .proofread-modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .spinner {
+    width: 32px; height: 32px; margin: 24px auto 16px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .diff-view {
+    font-family: 'SF Mono', Menlo, monospace; font-size: 13px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; max-height: 50vh; overflow: auto; white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .diff-eq  { color: var(--text-muted); padding: 1px 6px; }
+  .diff-del { background: rgba(248,81,73,0.18); color: #ffb4ab; padding: 1px 6px; border-left: 3px solid var(--error); }
+  .diff-add { background: rgba(35,134,54,0.22); color: #7ee787;  padding: 1px 6px; border-left: 3px solid #2ea043; }
+  .diff-empty { color: var(--text-muted); font-style: italic; padding: 12px; text-align: center; }
+
   .modal-close {
     float: right;
     background: none;
@@ -703,6 +725,8 @@
         <span class="status" id="status"></span>
         <button class="btn btn-secondary btn-sm" onclick="newPost()">New</button>
         <button class="btn btn-secondary btn-sm" id="loadBtn" onclick="showLoadDialog()">Load</button>
+        <button class="btn btn-secondary btn-sm" id="proofreadBtn" onclick="openProofread()">Proofread</button>
+        <button class="btn btn-secondary btn-sm" id="revertProofreadBtn" onclick="revertProofread()" style="display:none">&#8629; Revert</button>
         <button class="btn btn-secondary btn-sm" id="draftBtn" onclick="savePost(true)">Save Draft</button>
         <button class="btn btn-primary btn-sm" id="publishBtn" onclick="savePost(false)">Publish</button>
       </div>
@@ -793,6 +817,37 @@
   </div>
 </div>
 
+<!-- Proofread modal (loading / diff / error) -->
+<div class="modal-overlay" id="proofreadModal">
+  <div class="modal proofread-modal">
+    <div class="proofread-state" id="proofreadLoading">
+      <div class="spinner"></div>
+      <p>Proofreading…</p>
+      <p class="muted">Sonnet 모델 호출 중 (일반: 30~90초)</p>
+      <p class="muted" id="proofreadElapsed">경과: 0:00</p>
+      <div class="actions">
+        <button class="btn btn-secondary btn-sm" onclick="cancelProofread()">Cancel</button>
+      </div>
+    </div>
+    <div class="proofread-state" id="proofreadDiff" style="display:none">
+      <h2>Proofread result</h2>
+      <p class="muted">변경된 줄만 빨강(원본)·초록(교정)으로 표시됩니다.</p>
+      <div id="proofreadDiffBody" class="diff-view"></div>
+      <div class="actions">
+        <button class="btn btn-secondary btn-sm" onclick="closeProofread()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="applyProofread()">Apply All</button>
+      </div>
+    </div>
+    <div class="proofread-state" id="proofreadError" style="display:none">
+      <h2>Proofread failed</h2>
+      <p id="proofreadErrorMsg" class="error-msg"></p>
+      <div class="actions">
+        <button class="btn btn-secondary btn-sm" onclick="closeProofread()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm dialog modal -->
 <div class="modal-overlay" id="confirmModal">
   <div class="confirm-dialog">
@@ -805,6 +860,7 @@
   </div>
 </div>
 
+<script src="time-format.js"></script>
 <script>
   // ══════════════════════════════════════
   // State
@@ -1231,6 +1287,11 @@
     // Restore draft to editor fields (but don't switch to editor)
     restoreDraft();
 
+    // If a proofread backup survived a reload, expose the revert button
+    if (localStorage.getItem(PROOFREAD_BACKUP_KEY) != null) {
+      document.getElementById('revertProofreadBtn').style.display = '';
+    }
+
     // Show dashboard as default
     showView('dashboard');
   })();
@@ -1485,6 +1546,7 @@
       const data = await res.json();
       if (data.success) {
         clearDraft();
+        clearProofreadBackup();
         editingIsDraft = isDraft;
         updateEditingStatus();
         const action = isDraft ? 'Draft saved' : 'Published';
@@ -1501,6 +1563,165 @@
       publishBtn.textContent = 'Publish';
     }
   }
+
+  // ══════════════════════════════════════
+  // Proofread — LLM-backed Korean spelling/grammar correction
+  // See CONTEXT.md (Proofread, Protected Segment) and docs/adr/0002-llm-proofread.md
+  // ══════════════════════════════════════
+  const PROOFREAD_BACKUP_KEY = 'postforge.proofread.backup';
+  let proofreadInFlight = false;
+  let pendingDiff = null; // { original, corrected }
+  let elapsedTimer = null;
+  let elapsedStart = 0;
+
+  function showProofreadState(which) {
+    for (const id of ['proofreadLoading', 'proofreadDiff', 'proofreadError']) {
+      document.getElementById(id).style.display = id === which ? '' : 'none';
+    }
+  }
+
+  function startElapsedTimer() {
+    stopElapsedTimer();
+    elapsedStart = Date.now();
+    document.getElementById('proofreadElapsed').textContent = '경과: 0:00';
+    elapsedTimer = setInterval(() => {
+      const sec = (Date.now() - elapsedStart) / 1000;
+      document.getElementById('proofreadElapsed').textContent = `경과: ${formatElapsed(sec)}`;
+    }, 1000);
+  }
+
+  function stopElapsedTimer() {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  }
+
+  async function openProofread() {
+    if (proofreadInFlight) return;
+    if (!window.electronAPI?.proofread) {
+      setStatus('error', 'Proofread unavailable in this environment.');
+      return;
+    }
+    const body = editorEl.value;
+    if (!body.trim()) { setStatus('error', '본문이 비어있습니다.'); return; }
+
+    const threshold = await window.electronAPI.proofreadWarnThreshold();
+    if (body.length > threshold) {
+      const ok = window.confirm(
+        `본문이 ${body.length.toLocaleString()}자입니다 (권장 ${threshold.toLocaleString()}자). ` +
+        `2분 이상 걸릴 수 있어요. 계속하시겠어요?`
+      );
+      if (!ok) return;
+    }
+
+    proofreadInFlight = true;
+    showProofreadState('proofreadLoading');
+    document.getElementById('proofreadModal').classList.add('active');
+    startElapsedTimer();
+
+    const result = await window.electronAPI.proofread(body);
+    proofreadInFlight = false;
+    stopElapsedTimer();
+
+    if (!result || !result.ok) {
+      document.getElementById('proofreadErrorMsg').textContent =
+        result?.error || 'Unknown error';
+      showProofreadState('proofreadError');
+      return;
+    }
+
+    if (result.body === body) {
+      document.getElementById('proofreadErrorMsg').textContent = 'No issues found.';
+      showProofreadState('proofreadError');
+      return;
+    }
+
+    pendingDiff = { original: body, corrected: result.body };
+    renderProofreadDiff(pendingDiff);
+    showProofreadState('proofreadDiff');
+  }
+
+  async function cancelProofread() {
+    if (!proofreadInFlight) { closeProofread(); return; }
+    await window.electronAPI.cancelProofread();
+    // The pending invoke will resolve with ok:false → handled by openProofread flow
+  }
+
+  function closeProofread() {
+    stopElapsedTimer();
+    document.getElementById('proofreadModal').classList.remove('active');
+    pendingDiff = null;
+  }
+
+  function applyProofread() {
+    if (!pendingDiff) return;
+    localStorage.setItem(PROOFREAD_BACKUP_KEY, pendingDiff.original);
+    editorEl.value = pendingDiff.corrected;
+    autosave();
+    document.getElementById('revertProofreadBtn').style.display = '';
+    setStatus('success', 'Proofread applied. Revert available until next save.');
+    closeProofread();
+  }
+
+  function revertProofread() {
+    const backup = localStorage.getItem(PROOFREAD_BACKUP_KEY);
+    if (backup == null) {
+      document.getElementById('revertProofreadBtn').style.display = 'none';
+      return;
+    }
+    editorEl.value = backup;
+    autosave();
+    clearProofreadBackup();
+    setStatus('success', 'Reverted to pre-proofread body.');
+  }
+
+  function clearProofreadBackup() {
+    localStorage.removeItem(PROOFREAD_BACKUP_KEY);
+    document.getElementById('revertProofreadBtn').style.display = 'none';
+  }
+
+  // Line-level LCS diff — unified style (deletions then insertions).
+  function lineDiff(a, b) {
+    const A = a.split('\n'), B = b.split('\n');
+    const m = A.length, n = B.length;
+    const dp = [];
+    for (let i = 0; i <= m; i++) dp.push(new Array(n + 1).fill(0));
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = A[i-1] === B[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+      }
+    }
+    const ops = [];
+    let i = m, j = n;
+    while (i > 0 && j > 0) {
+      if (A[i-1] === B[j-1]) { ops.push({op:'eq', text:A[i-1]}); i--; j--; }
+      else if (dp[i][j-1] >= dp[i-1][j]) { ops.push({op:'add', text:B[j-1]}); j--; }
+      else { ops.push({op:'del', text:A[i-1]}); i--; }
+    }
+    while (i > 0) ops.push({op:'del', text:A[--i]});
+    while (j > 0) ops.push({op:'add', text:B[--j]});
+    return ops.reverse();
+  }
+
+  function renderProofreadDiff({ original, corrected }) {
+    const ops = lineDiff(original, corrected);
+    const target = document.getElementById('proofreadDiffBody');
+    const hasChange = ops.some(o => o.op !== 'eq');
+    if (!hasChange) {
+      target.innerHTML = '<div class="diff-empty">No changes.</div>';
+      return;
+    }
+    target.innerHTML = ops.map(o => {
+      const cls = o.op === 'eq' ? 'diff-eq' : o.op === 'del' ? 'diff-del' : 'diff-add';
+      const prefix = o.op === 'del' ? '- ' : o.op === 'add' ? '+ ' : '  ';
+      return `<div class="${cls}">${escapeHtml(prefix + (o.text || ''))}</div>`;
+    }).join('');
+  }
+
+  // Click outside modal to close (only in diff/error states; loading must use Cancel)
+  document.getElementById('proofreadModal').addEventListener('click', (e) => {
+    if (e.target.id !== 'proofreadModal') return;
+    if (proofreadInFlight) return;
+    closeProofread();
+  });
 
   // ══════════════════════════════════════
   // Load dialog
@@ -1540,6 +1761,7 @@
       const data = await res.json();
       if (!data.post) { setStatus('error', 'Cannot load post'); return; }
 
+      clearProofreadBackup();
       const post = data.post;
       currentPost = post;
       document.getElementById('title').value = post.title || '';
@@ -1608,6 +1830,7 @@
   // ══════════════════════════════════════
   function newPost() {
     clearDraft();
+    clearProofreadBackup();
     currentPost = null;
     editingIsDraft = false;
     document.getElementById('title').value = '';

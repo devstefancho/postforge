@@ -3,6 +3,7 @@ const { readFileSync, writeFileSync, mkdirSync, existsSync } = require('node:fs'
 const { join, dirname } = require('node:path');
 const { spawn } = require('node:child_process');
 const { generateSlug } = require('./slug-generator');
+const { proofread, SIZE_WARN_THRESHOLD } = require('./proofreader');
 
 // ──────────────────────────────────────
 // Config (API URL + Token)
@@ -176,6 +177,32 @@ ipcMain.handle('generate-slug', async (_, title) => {
     return { ok: false, error: err.message };
   }
 });
+
+// Proofread — single-flight; a new invocation aborts any in-flight one.
+let proofreadAbort = null;
+ipcMain.handle('proofread', async (_, body) => {
+  if (proofreadAbort) proofreadAbort.abort();
+  const ctrl = new AbortController();
+  proofreadAbort = ctrl;
+  try {
+    const corrected = await proofread({ body, signal: ctrl.signal });
+    return { ok: true, body: corrected };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    if (proofreadAbort === ctrl) proofreadAbort = null;
+  }
+});
+
+ipcMain.handle('cancel-proofread', () => {
+  if (proofreadAbort) {
+    proofreadAbort.abort();
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('proofread-warn-threshold', () => SIZE_WARN_THRESHOLD);
 
 ipcMain.handle('show-image-dialog', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
