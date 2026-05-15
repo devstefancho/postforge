@@ -1112,6 +1112,55 @@
   }
 
   // ══════════════════════════════════════
+  // Slug — auto-generate via Electron main (claude -p) when empty
+  // See CONTEXT.md and docs/adr/0001-llm-generated-slug.md
+  // ══════════════════════════════════════
+  async function ensureSlug() {
+    const slugInput = document.getElementById('slug');
+    const existing = slugInput.value.trim();
+    if (existing) return existing;
+
+    const title = document.getElementById('title').value.trim();
+    if (!title) {
+      setStatus('error', 'Enter title first (slug is generated from it)');
+      document.getElementById('title').focus();
+      return null;
+    }
+
+    if (!window.electronAPI?.generateSlug) {
+      setStatus('error', 'Slug auto-generation unavailable. Enter slug manually.');
+      slugInput.focus();
+      return null;
+    }
+
+    setStatus('info', 'Generating slug...');
+    const result = await window.electronAPI.generateSlug(title);
+
+    if (!result || !result.ok) {
+      const msg = result?.error || 'unknown error';
+      setStatus('error', `Slug generation failed: ${msg}. Enter slug manually.`);
+      slugInput.focus();
+      return null;
+    }
+
+    // Collision check via existing GET endpoint (200 = exists, 404 = available)
+    try {
+      const probe = await apiFetch(`/api/posts/${result.slug}`);
+      if (probe.ok) {
+        slugInput.value = result.slug;
+        autosave();
+        setStatus('error', `Slug "${result.slug}" already exists. Edit it and try again.`);
+        slugInput.focus();
+        return null;
+      }
+    } catch (_) { /* probe failed (offline etc.) — proceed and let save endpoint surface any dup */ }
+
+    slugInput.value = result.slug;
+    autosave();
+    return result.slug;
+  }
+
+  // ══════════════════════════════════════
   // Auto-save to localStorage (debounced)
   // ══════════════════════════════════════
   let saveTimer;
@@ -1307,8 +1356,8 @@
     const file = heroFile.files[0];
     if (!file) return;
 
-    const slug = document.getElementById('slug').value.trim();
-    if (!slug) { setStatus('error', 'Enter slug first'); return; }
+    const slug = await ensureSlug();
+    if (!slug) return;
 
     const ext = file.name.split('.').pop();
     heroFileName = `hero.${ext}`;
@@ -1360,8 +1409,8 @@
 
     if (currentView !== 'editor') return;
 
-    const slug = document.getElementById('slug').value.trim();
-    if (!slug) { setStatus('error', 'Enter slug first'); return; }
+    const slug = await ensureSlug();
+    if (!slug) return;
 
     for (const file of e.dataTransfer.files) {
       if (!file.type.startsWith('image/')) continue;
@@ -1407,13 +1456,11 @@
   // Save post (with isDraft support)
   // ══════════════════════════════════════
   async function savePost(isDraft = false) {
-    const slug = document.getElementById('slug').value.trim();
     const title = document.getElementById('title').value.trim();
     const description = document.getElementById('description').value.trim();
     const category = document.getElementById('category').value;
     const content = editorEl.value;
 
-    if (!slug) { setStatus('error', 'Enter slug'); return; }
     if (!title) { setStatus('error', 'Enter title'); return; }
     if (!content.trim()) { setStatus('error', 'Enter content'); return; }
 
@@ -1424,6 +1471,9 @@
     (isDraft ? draftBtn : publishBtn).textContent = 'Saving...';
 
     try {
+      const slug = await ensureSlug();
+      if (!slug) return;
+
       const heroImage = heroFileName ? `posts/${slug}/${heroFileName}` : '';
       const res = await apiFetch('/api/posts', {
         method: 'POST',

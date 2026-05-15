@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
 const { readFileSync, writeFileSync, mkdirSync, existsSync } = require('node:fs');
 const { join, dirname } = require('node:path');
 const { spawn } = require('node:child_process');
+const { generateSlug } = require('./slug-generator');
 
 // ──────────────────────────────────────
 // Config (API URL + Token)
@@ -165,6 +166,15 @@ ipcMain.handle('save-config', (_, config) => {
   const updated = { ...current, ...config };
   saveConfig(updated);
   return updated;
+});
+
+ipcMain.handle('generate-slug', async (_, title) => {
+  try {
+    const slug = await generateSlug({ title });
+    return { ok: true, slug };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('show-image-dialog', async () => {

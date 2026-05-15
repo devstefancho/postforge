@@ -17,4 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Native file dialog for images
   showImageDialog: () => ipcRenderer.invoke('show-image-dialog'),
+
+  // LLM-based slug generation
+  generateSlug: (title) => ipcRenderer.invoke('generate-slug', title),
 });
