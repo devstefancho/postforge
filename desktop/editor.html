@@ -1515,10 +1515,106 @@
 
   // ══════════════════════════════════════
   // Save post (with isDraft support)
+  // See ADR-0003 (auto description), ADR-0004 (auto hero)
   // ══════════════════════════════════════
+  async function ensureDescription(title, body) {
+    const descInput = document.getElementById('description');
+    if (descInput.value.trim()) return descInput.value.trim();
+    if (!window.electronAPI?.generateDescription) return '';
+
+    setStatus('info', 'Generating description...');
+    const result = await window.electronAPI.generateDescription({ title, body });
+    if (!result || !result.ok) {
+      // ADR-0003: silent failure — leave empty, next Save retries.
+      return '';
+    }
+    descInput.value = result.description;
+    autosave();
+    return result.description;
+  }
+
+  function scheduleHeroAutoFill({ slug, title, description, tags, category }) {
+    if (!window.electronAPI?.generateHero) return;
+    setStatus('info', 'Generating hero image...');
+    (async () => {
+      let result;
+      try {
+        result = await window.electronAPI.generateHero({ title, description, tags, category });
+      } catch (e) {
+        setStatus('error', `Hero generation failed: ${e.message}`);
+        return;
+      }
+      if (!result || !result.ok) {
+        if (result?.disabled) {
+          setStatus('info', 'GEMINI_API_KEY not set — hero auto-generation disabled.');
+        } else {
+          setStatus('error', `Hero generation failed: ${result?.error || 'unknown'}`);
+        }
+        return;
+      }
+
+      try {
+        const filename = 'hero.png';
+        const uploadRes = await apiFetch('/api/images/upload', {
+          method: 'POST',
+          body: JSON.stringify({ slug, filename, data: result.base64 }),
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) {
+          setStatus('error', `Hero upload failed: ${uploadData.error || 'unknown'}`);
+          return;
+        }
+
+        // Fetch latest DB row so we only modify hero_image and preserve any
+        // post fields the user may have changed since the foreground Save.
+        const postRes = await apiFetch(`/api/posts/${slug}`);
+        if (!postRes.ok) {
+          setStatus('error', 'Hero saved on disk but DB update failed (post not found).');
+          return;
+        }
+        const { post } = await postRes.json();
+
+        const updateRes = await apiFetch('/api/posts', {
+          method: 'POST',
+          body: JSON.stringify({
+            slug,
+            title: post.title,
+            description: post.description,
+            category: post.category,
+            tags: post.tags,
+            heroImage: `posts/${slug}/${filename}`,
+            content: post.content,
+            isDraft: post.is_draft,
+          }),
+        });
+        const updateData = await updateRes.json();
+        if (!updateData.success) {
+          setStatus('error', `Hero metadata update failed: ${updateData.error || 'unknown'}`);
+          return;
+        }
+
+        // Reflect in whichever view the user happens to be on now.
+        // (ADR-0004: the hero job is async, the user may have navigated
+        // since the foreground Save returned.)
+        const slugInput = document.getElementById('slug');
+        if (currentView === 'editor' && slugInput.value.trim() === slug) {
+          heroFileName = filename;
+          document.getElementById('heroPreview').textContent = filename;
+        } else if (currentView === 'dashboard') {
+          loadDashboardPosts();
+        } else if (currentView === 'readonly' && slugInput.value.trim() === slug) {
+          document.getElementById('readonlyHero').innerHTML =
+            `<img src="${API_BASE}/api/images/posts/${slug}/${filename}" alt="Hero image">`;
+        }
+        setStatus('success', 'Hero image generated.');
+      } catch (e) {
+        setStatus('error', `Hero save failed: ${e.message}`);
+      }
+    })();
+  }
+
   async function savePost(isDraft = false) {
     const title = document.getElementById('title').value.trim();
-    const description = document.getElementById('description').value.trim();
     const category = document.getElementById('category').value;
     const content = editorEl.value;
 
@@ -1534,6 +1630,8 @@
     try {
       const slug = await ensureSlug();
       if (!slug) return;
+
+      const description = await ensureDescription(title, content);
 
       const heroImage = heroFileName ? `posts/${slug}/${heroFileName}` : '';
       const res = await apiFetch('/api/posts', {
@@ -1551,6 +1649,10 @@
         updateEditingStatus();
         const action = isDraft ? 'Draft saved' : 'Published';
         setStatus('success', `${action}! ${slug} (${data.isNew ? 'new' : 'updated'})`);
+
+        if (!heroFileName) {
+          scheduleHeroAutoFill({ slug, title, description, tags, category });
+        }
       } else {
         setStatus('error', data.error);
       }

@@ -13,7 +13,16 @@ A short URL-safe string (kebab-case, lowercase ASCII) that serves as the **perma
 _Avoid_: ID, key, permalink
 
 **Trigger Action**:
-A user action that requires a **Slug** to proceed — currently *Save* and *Image Upload*. If the **Slug** field is empty and the post has not yet been saved, the trigger fires LLM-based slug generation (see [ADR-0001](./docs/adr/0001-llm-generated-slug.md)).
+A user action that requires a **Slug** to proceed — currently *Save* and *Image Upload*. If the **Slug** field is empty and the post has not yet been saved, the trigger fires LLM-based slug generation (see [ADR-0001](./docs/adr/0001-llm-generated-slug.md)). *Save* additionally fires **Auto-Fill** for any other empty **Auto-Filled Field**.
+
+**Auto-Filled Field**:
+A user-owned **Post** field that, when left empty at *Save* time, is populated by an LLM as part of the Save flow. Currently **Slug**, **Description**, and **Hero Image**. Once filled, an **Auto-Filled Field** is a regular user-editable field — *the user can clear or overwrite it freely* — with one exception: **Slug** is locked permanently after first save. Clearing a **Description** or **Hero Image** then saving re-triggers **Auto-Fill**.
+
+**Description**:
+A 1–2 sentence Korean summary of a **Post**, surfaced in dashboard cards and (eventually) SEO meta tags. An **Auto-Filled Field** generated *synchronously* during *Save* from `Title + body` when empty (see ADR-0003).
+
+**Hero Image**:
+The headline 16:9 image of a **Post**, stored at `posts/<slug>/hero.<ext>` and referenced by the `hero_image` DB column. An **Auto-Filled Field** generated *asynchronously* (after the Save response returns) from the **Post**'s `Title + Description + tags` via Gemini when empty. Style: abstract / minimalist illustration. When the async job completes, the *currently active view* (editor / dashboard / readonly) reflects the new hero without a manual reload. (See ADR-0004.)
 
 **Draft**:
 A **Post** with `is_draft = true`. Stored in the same table as published posts; the difference is purely the flag and the filtering in list endpoints.
@@ -31,6 +40,8 @@ A region of a **Post** body that must remain byte-identical through a **Proofrea
 - A **Post** is uniquely identified by its **Slug**
 - A **Post**'s images live in a directory named after its **Slug**
 - A **Trigger Action** on a **Post** without a **Slug** generates one from its **Title** (only before first save)
+- A *Save* fires **Auto-Fill** for each empty **Auto-Filled Field**: **Slug** → **Description** → **Hero Image** (chained, the prior step's output feeds the next)
+- **Slug** and **Description** are auto-filled *synchronously* (block the Save response); **Hero Image** is auto-filled *asynchronously* (Save returns immediately, image lands later)
 - A **Draft** is a state of a **Post**, not a separate entity
 - A **Proofread** operates on a **Post**'s body, treating all **Protected Segments** as immutable
 - A **Proofread** result is reversible until the next *Save* or next **Proofread**
@@ -43,6 +54,10 @@ A region of a **Post** body that must remain byte-identical through a **Proofrea
 > **User:** "I ran **Proofread** and one of my code samples got rewritten — what?"
 > **Designer:** "That shouldn't happen — code fences are **Protected Segments**. If it did, the placeholder restore step would have caught a missing token and refused the result. If the modal showed the change anyway, the protection rules need to be widened (e.g. an indented code block instead of a fenced one)."
 
+> **User:** "I don't like the auto-generated **Hero Image** on this post — can I get a new one?"
+> **Designer:** "**Hero Image** is an **Auto-Filled Field**, so the simplest path is: clear the hero (use the existing Hero Image control) and save again — the auto-fill chain will produce a new one in the background. If you want something specific, just upload an image manually; that overwrites the auto-fill the same way it would for any other field."
+
 ## Flagged ambiguities
 
 - "Slug" sometimes informally refers to "a URL-friendly version of a name." Here it is stricter: it is the **identity** of a **Post**, not a decoration on top of one.
+- "Description" in the `posts.description` column has historically been a free-form user field. From ADR-0003 onward it is also an **Auto-Filled Field** — the column shape is unchanged, but the semantics of an empty value at Save time are now "ask the LLM to fill this," not "leave it empty."
