@@ -4,6 +4,43 @@ const { join, dirname } = require('node:path');
 const { spawn } = require('node:child_process');
 const { generateSlug } = require('./slug-generator');
 const { proofread, SIZE_WARN_THRESHOLD } = require('./proofreader');
+const { generateDescription } = require('./description-generator');
+const { generateHero, hasApiKey: hasGeminiKey, ENV_KEY: GEMINI_ENV_KEY } = require('./hero-generator');
+const { translateTopic } = require('./hero-topic-translator');
+
+// ──────────────────────────────────────
+// .env loading (project root)
+// The Express server uses `dotenv/config`; Electron main has its own process
+// so we mirror that here for GEMINI_API_KEY (ADR-0004).
+// ──────────────────────────────────────
+
+function parseEnvFile(content) {
+  const out = {};
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+function loadDotEnv(envPath) {
+  if (!existsSync(envPath)) return;
+  const parsed = parseEnvFile(readFileSync(envPath, 'utf-8'));
+  for (const [k, v] of Object.entries(parsed)) {
+    if (process.env[k] === undefined) process.env[k] = v;
+  }
+}
 
 // ──────────────────────────────────────
 // Config (API URL + Token)
@@ -178,6 +215,41 @@ ipcMain.handle('generate-slug', async (_, title) => {
   }
 });
 
+ipcMain.handle('generate-description', async (_, payload) => {
+  try {
+    const description = await generateDescription({
+      title: payload?.title,
+      body: payload?.body,
+    });
+    return { ok: true, description };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('generate-hero', async (_, payload) => {
+  if (!hasGeminiKey()) {
+    return { ok: false, disabled: true, error: `${GEMINI_ENV_KEY} not set` };
+  }
+  try {
+    // Imagen draws "ghost glyphs" if the prompt contains Korean. Compress the
+    // user-facing fields down to one English noun phrase first, then feed
+    // only that phrase to Imagen. See ADR-0004.
+    const topic = await translateTopic({
+      title: payload?.title,
+      description: payload?.description,
+      tags: payload?.tags,
+      category: payload?.category,
+    });
+    const image = await generateHero({ topic });
+    return { ok: true, base64: image.base64, mimeType: image.mimeType };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('hero-auto-available', () => hasGeminiKey());
+
 // Proofread — single-flight; a new invocation aborts any in-flight one.
 let proofreadAbort = null;
 ipcMain.handle('proofread', async (_, body) => {
@@ -252,6 +324,7 @@ function stopLocalServer() {
 
 // App lifecycle
 app.whenReady().then(() => {
+  loadDotEnv(join(PROJECT_ROOT, '.env'));
   startLocalServer();
   createWindow();
 });

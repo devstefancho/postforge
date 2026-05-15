@@ -39,7 +39,10 @@ Edit `.env`:
 API_SECRET_KEY=your-secret-key
 PORT=8788
 DATA_DIR=./data
+GEMINI_API_KEY=your-gemini-key   # optional — enables hero auto-generation (ADR-0004)
 ```
+
+If `GEMINI_API_KEY` is unset, Save still works; the hero auto-generation step is silently disabled and manual hero upload continues to work.
 
 ## API
 

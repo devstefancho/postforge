@@ -25,4 +25,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   proofread: (body) => ipcRenderer.invoke('proofread', body),
   cancelProofread: () => ipcRenderer.invoke('cancel-proofread'),
   proofreadWarnThreshold: () => ipcRenderer.invoke('proofread-warn-threshold'),
+
+  // LLM-based description auto-fill (ADR-0003)
+  generateDescription: (payload) => ipcRenderer.invoke('generate-description', payload),
+
+  // Gemini-based hero image auto-fill (ADR-0004)
+  generateHero: (payload) => ipcRenderer.invoke('generate-hero', payload),
+  heroAutoAvailable: () => ipcRenderer.invoke('hero-auto-available'),
 });
