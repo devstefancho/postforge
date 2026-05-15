@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac"
+    "build": "electron-builder --mac",
+    "test": "node --test slug-generator.test.js proofreader.test.js time-format.test.js"
   },
   "build": {
     "appId": "com.devstefancho.postforge",
@@ -17,7 +18,10 @@
     "files": [
       "main.js",
       "preload.js",
-      "editor.html"
+      "editor.html",
+      "slug-generator.js",
+      "proofreader.js",
+      "time-format.js"
     ]
   },
   "devDependencies": {

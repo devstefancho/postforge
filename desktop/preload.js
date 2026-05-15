@@ -17,4 +17,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Native file dialog for images
   showImageDialog: () => ipcRenderer.invoke('show-image-dialog'),
+
+  // LLM-based slug generation
+  generateSlug: (title) => ipcRenderer.invoke('generate-slug', title),
+
+  // LLM-based whole-body proofread (Korean spelling/grammar)
+  proofread: (body) => ipcRenderer.invoke('proofread', body),
+  cancelProofread: () => ipcRenderer.invoke('cancel-proofread'),
+  proofreadWarnThreshold: () => ipcRenderer.invoke('proofread-warn-threshold'),
 });
