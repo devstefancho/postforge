@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth.js';
-import { putImage, getImage } from '../storage.js';
+import { putImage, getImage, isAllowedImageExt } from '../storage.js';
 
 export const imagesRouter = Router();
 
@@ -24,6 +24,14 @@ imagesRouter.post('/upload', requireAuth, (req, res) => {
 
   if (/[\/\\]|\.\./.test(filename)) {
     res.status(400).json({ error: 'Invalid filename' });
+    return;
+  }
+
+  // SVG and any other non-allowlisted format is rejected at the boundary —
+  // SVG can carry executable script and there's no reason a blog hero needs
+  // to be SVG.
+  if (!isAllowedImageExt(filename)) {
+    res.status(400).json({ error: 'Unsupported image type (png/jpg/jpeg/gif/webp only)' });
     return;
   }
 

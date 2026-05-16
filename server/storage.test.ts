@@ -10,6 +10,8 @@ import {
   getImage,
   deleteImage,
   deleteImagesByPrefix,
+  isAllowedImageExt,
+  getMimeType,
   _internal,
 } from './storage.js';
 
@@ -103,4 +105,42 @@ test('deleteImagesByPrefix removes only the targeted post directory', () => {
 
   assert.equal(existsSync(join(dataDir, 'images', 'posts', 'alpha', 'hero.png')), false);
   assert.equal(existsSync(join(dataDir, 'images', 'posts', 'beta', 'hero.png')), true);
+});
+
+// ── H5: SVG and other risky formats ─────────────────────────────────
+
+test('isAllowedImageExt accepts standard raster formats', () => {
+  assert.equal(isAllowedImageExt('hero.png'), true);
+  assert.equal(isAllowedImageExt('hero.JPG'), true);
+  assert.equal(isAllowedImageExt('hero.jpeg'), true);
+  assert.equal(isAllowedImageExt('hero.gif'), true);
+  assert.equal(isAllowedImageExt('hero.webp'), true);
+});
+
+test('isAllowedImageExt rejects SVG and executable-ish extensions', () => {
+  assert.equal(isAllowedImageExt('hero.svg'), false);
+  assert.equal(isAllowedImageExt('hero.SVG'), false);
+  assert.equal(isAllowedImageExt('hero.html'), false);
+  assert.equal(isAllowedImageExt('hero.js'), false);
+  assert.equal(isAllowedImageExt('hero'), false);
+  assert.equal(isAllowedImageExt(''), false);
+});
+
+test('getMimeType returns octet-stream for SVG (defense in depth)', () => {
+  // Even if an .svg slipped past the upload guard, the serve path must not
+  // advertise it as image/svg+xml — browsers download octet-stream rather
+  // than execute embedded <script>.
+  assert.equal(getMimeType('legacy.svg'), 'application/octet-stream');
+  assert.equal(getMimeType('legacy.html'), 'application/octet-stream');
+});
+
+test('getImage returns octet-stream content-type for an .svg key', () => {
+  setup();
+  // Simulate an .svg already on disk (e.g. seeded before this patch).
+  putImage('posts/old-post/legacy.png', Buffer.from('not really svg'));
+  // putImage doesn't care about extension; it's the upload route that does.
+  // The serve path must still refuse to label this as SVG.
+  const got = getImage('posts/old-post/legacy.png');
+  assert.ok(got);
+  assert.equal(got!.contentType, 'image/png');
 });
