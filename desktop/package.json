@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --mac",
-    "test": "node --test slug-generator.test.js proofreader.test.js time-format.test.js description-generator.test.js hero-generator.test.js hero-topic-translator.test.js"
+    "test": "node --test slug-generator.test.js proofreader.test.js time-format.test.js description-generator.test.js hero-generator.test.js hero-topic-translator.test.js markdown-renderer.test.js"
   },
   "build": {
     "appId": "com.devstefancho.postforge",
@@ -24,7 +24,8 @@
       "time-format.js",
       "description-generator.js",
       "hero-generator.js",
-      "hero-topic-translator.js"
+      "hero-topic-translator.js",
+      "markdown-renderer.js"
     ]
   },
   "dependencies": {

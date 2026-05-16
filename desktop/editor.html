@@ -1947,6 +1947,7 @@
 </div>
 
 <script src="time-format.js"></script>
+<script src="markdown-renderer.js"></script>
 <script>
   // ══════════════════════════════════════
   // State
@@ -2827,38 +2828,8 @@
     }
   });
 
-  // ══════════════════════════════════════
-  // Markdown renderer
-  // ══════════════════════════════════════
-  function renderMarkdown(md) {
-    let html = md
-      .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-        `<pre><code>${escapeHtml(code.trim())}</code></pre>`)
-      .replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
-        const heads = header.split('|').filter(Boolean).map(h => `<th>${h.trim()}</th>`).join('');
-        const rows = body.trim().split('\n').map(row => {
-          const cells = row.split('|').filter(Boolean).map(c => `<td>${c.trim()}</td>`).join('');
-          return `<tr>${cells}</tr>`;
-        }).join('');
-        return `<table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table>`;
-      })
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-      .replace(/^---$/gm, '<hr>')
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-      .replace(/\n\n/g, '</p><p>');
-
-    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
-    return `<p>${html}</p>`;
-  }
+  // Markdown renderer lives in markdown-renderer.js (loaded above) so it can
+  // be unit-tested with node --test. It exposes `window.renderMarkdown`.
 
   function escapeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
