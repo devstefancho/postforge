@@ -218,6 +218,50 @@ test('M3: empty bearer → 401', async () => {
   assert.equal(res.status, 401);
 });
 
+// ── NEW-1: image route also hides draft hero ───────────────────────
+
+test('NEW-1: draft hero image hidden from unauth callers', async () => {
+  // Seed a draft and upload a hero image under its slug.
+  const create = await request(app)
+    .post('/api/posts')
+    .set('Authorization', AUTH_HEADER)
+    .send({ slug: 'draft-with-hero', title: 'D', content: 'b', isDraft: 1 });
+  assert.equal(create.status, 201);
+
+  const up = await request(app)
+    .post('/api/images/upload')
+    .set('Authorization', AUTH_HEADER)
+    .send({ slug: 'draft-with-hero', filename: 'hero.png', data: 'aGVsbG8=' });
+  assert.equal(up.status, 200);
+
+  // Unauth caller: 404 (even though the file is on disk).
+  const unauth = await request(app).get('/api/images/posts/draft-with-hero/hero.png');
+  assert.equal(unauth.status, 404);
+
+  // Auth caller: 200 with the bytes.
+  const auth = await request(app)
+    .get('/api/images/posts/draft-with-hero/hero.png')
+    .set('Authorization', AUTH_HEADER);
+  assert.equal(auth.status, 200);
+  assert.equal(auth.body.toString(), 'hello');
+});
+
+test('NEW-1: published post hero stays public', async () => {
+  const create = await request(app)
+    .post('/api/posts')
+    .set('Authorization', AUTH_HEADER)
+    .send({ slug: 'public-with-hero', title: 'P', content: 'b', isDraft: 0 });
+  assert.equal(create.status, 201);
+
+  await request(app)
+    .post('/api/images/upload')
+    .set('Authorization', AUTH_HEADER)
+    .send({ slug: 'public-with-hero', filename: 'hero.png', data: 'aGVsbG8=' });
+
+  const res = await request(app).get('/api/images/posts/public-with-hero/hero.png');
+  assert.equal(res.status, 200);
+});
+
 // ── Regression: normal upload + GET roundtrip ───────────────────────
 
 test('Regression: normal slug round-trip (upload → GET)', async () => {

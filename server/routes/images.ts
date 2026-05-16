@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { requireAuth } from '../auth.js';
+import { requireAuth, isAuthed } from '../auth.js';
 import { putImage, getImage, isAllowedImageExt } from '../storage.js';
+import { getDb } from '../db.js';
 
 export const imagesRouter = Router();
 
@@ -48,10 +49,29 @@ imagesRouter.post('/upload', requireAuth, (req, res) => {
 
 // GET /api/images/* — Serve image
 imagesRouter.get('/*', (req, res) => {
-  const key = req.params[0] as string;
+  // Express's typed params don't expose the wildcard index cleanly; cast via
+  // unknown to access the captured path tail.
+  const key = (req.params as unknown as Record<string, string>)[0];
   if (!key) {
     res.status(404).send('Not found');
     return;
+  }
+
+  // NEW-1 / extends M1: hero images of draft posts live under
+  // posts/<draft-slug>/hero.<ext>. Without this check, the same draft body
+  // we gated in posts.ts would still leak its hero illustration through
+  // the image route. Treat unauthed access to a draft's image directory as
+  // 404 — same disclosure-hiding policy as the post body itself.
+  const postMatch = key.match(/^posts\/([^/]+)\//);
+  if (postMatch) {
+    const slug = postMatch[1];
+    const row = getDb()
+      .prepare('SELECT is_draft FROM posts WHERE slug = ?')
+      .get(slug) as { is_draft?: number } | undefined;
+    if (row && row.is_draft === 1 && !isAuthed(req)) {
+      res.status(404).send('Not found');
+      return;
+    }
   }
 
   const result = getImage(key);
