@@ -1,12 +1,20 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
-import { requireAuth } from '../auth.js';
+import { requireAuth, isAuthed } from '../auth.js';
 import { deleteImagesByPrefix } from '../storage.js';
 
 export const postsRouter = Router();
 
 // GET /api/posts — List posts
-postsRouter.get('/', (req, res) => {
+postsRouter.get('/', (req, res, next) => {
+  // M1: ?drafts=true expands the list to include unpublished posts. Drafts
+  // are by definition non-public so the same bearer token that gates writes
+  // also gates the draft view. Plain GET (no flag) remains public.
+  if (req.query.drafts === 'true') {
+    return requireAuth(req, res, next);
+  }
+  next();
+}, (req, res) => {
   const db = getDb();
   const category = req.query.category as string | undefined;
   const drafts = req.query.drafts === 'true';
@@ -48,6 +56,13 @@ postsRouter.get('/:slug', (req, res) => {
 
   const post = db.prepare('SELECT * FROM posts WHERE slug = ?').get(slug) as any;
   if (!post) {
+    res.status(404).json({ error: 'Post not found' });
+    return;
+  }
+
+  // M1: drafts are non-public. Respond 404 to unauthenticated callers so we
+  // don't even leak the existence of a draft slug.
+  if (post.is_draft === 1 && !isAuthed(req)) {
     res.status(404).json({ error: 'Post not found' });
     return;
   }

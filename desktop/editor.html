@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- M6: Content Security Policy. No inline <script> (only same-origin .js
+     files), inline styles allowed for the design's CSS-variable swaps.
+     Fonts/styles from Google Fonts + Pretendard CDN, images from local
+     server + data: URIs (used by the design's SVG icons), connect-src
+     scoped to localhost for the Express API. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; img-src 'self' data: http://localhost:* http://127.0.0.1:*; connect-src http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none';">
 <title>PostForge</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
