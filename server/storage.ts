@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, statSync, rmdirSync } from 'node:fs';
-import { join, dirname, extname } from 'node:path';
+import { join, dirname, extname, resolve, relative, isAbsolute } from 'node:path';
 
 let imagesDir: string;
 
@@ -17,14 +17,32 @@ const MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
+// Resolve `key` to an absolute path inside imagesDir. Returns null when the
+// resolved path escapes imagesDir — defends against `../` traversal in raw
+// or URL-encoded form. Express decodes %2e%2e/%2f into `..`/`/` before
+// handing params to handlers, so the literal `..` is what arrives here.
+function safeFilePath(key: string): string | null {
+  if (typeof key !== 'string' || key.length === 0) return null;
+  const filePath = resolve(imagesDir, key);
+  const rel = relative(imagesDir, filePath);
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return null;
+  return filePath;
+}
+
+// Exposed only for unit tests — production code goes through the storage
+// functions which apply the same guard.
+export const _internal = { safeFilePath };
+
 export function putImage(key: string, buffer: Buffer): void {
-  const filePath = join(imagesDir, key);
+  const filePath = safeFilePath(key);
+  if (!filePath) throw new Error(`invalid image key: ${JSON.stringify(key)}`);
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, buffer);
 }
 
 export function getImage(key: string): { buffer: Buffer; contentType: string } | null {
-  const filePath = join(imagesDir, key);
+  const filePath = safeFilePath(key);
+  if (!filePath) return null;
   if (!existsSync(filePath)) return null;
   const buffer = readFileSync(filePath);
   const ext = extname(key).toLowerCase();
@@ -33,7 +51,8 @@ export function getImage(key: string): { buffer: Buffer; contentType: string } |
 }
 
 export function listImages(prefix: string): string[] {
-  const dir = join(imagesDir, prefix);
+  const dir = safeFilePath(prefix);
+  if (!dir) return [];
   if (!existsSync(dir)) return [];
   try {
     return readdirSync(dir)
@@ -45,17 +64,18 @@ export function listImages(prefix: string): string[] {
 }
 
 export function deleteImage(key: string): void {
-  const filePath = join(imagesDir, key);
+  const filePath = safeFilePath(key);
+  if (!filePath) return;
   if (existsSync(filePath)) unlinkSync(filePath);
 }
 
 export function deleteImagesByPrefix(prefix: string): void {
+  const dir = safeFilePath(prefix);
+  if (!dir) return;
   const keys = listImages(prefix);
   for (const key of keys) {
     deleteImage(key);
   }
-  // Remove the directory if empty
-  const dir = join(imagesDir, prefix);
   if (existsSync(dir)) {
     try { rmdirSync(dir); } catch { /* not empty, ignore */ }
   }

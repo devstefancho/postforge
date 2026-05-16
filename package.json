@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server/index.ts",
+    "test": "tsx --test server/*.test.ts",
     "app": "cd desktop && npm start",
     "app:build": "cd desktop && npm run build"
   },

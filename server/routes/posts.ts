@@ -103,6 +103,14 @@ postsRouter.delete('/:slug', requireAuth, (req, res) => {
   const db = getDb();
   const { slug } = req.params;
 
+  // Reject any slug shape we wouldn't have accepted on create. Without this,
+  // a slug like ".." would make deleteImagesByPrefix resolve to imagesDir
+  // itself and wipe every post's images.
+  if (typeof slug !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
+    res.status(400).json({ error: 'Invalid slug format' });
+    return;
+  }
+
   const existing = db.prepare('SELECT id FROM posts WHERE slug = ?').get(slug);
   if (!existing) {
     res.status(404).json({ error: 'Post not found' });

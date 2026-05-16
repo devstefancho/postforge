@@ -4,12 +4,21 @@ import { putImage, getImage } from '../storage.js';
 
 export const imagesRouter = Router();
 
+// Must mirror the slug shape accepted by POST /api/posts so an upload can
+// never produce a key the post writer cannot also produce.
+const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
 // POST /api/images/upload — Upload image (base64)
 imagesRouter.post('/upload', requireAuth, (req, res) => {
   const { slug, filename, data } = req.body;
 
   if (!slug || !filename || !data) {
     res.status(400).json({ error: 'slug, filename, data(base64) are required' });
+    return;
+  }
+
+  if (typeof slug !== 'string' || !SLUG_RE.test(slug)) {
+    res.status(400).json({ error: 'Invalid slug format' });
     return;
   }
 
