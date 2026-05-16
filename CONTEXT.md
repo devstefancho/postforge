@@ -18,6 +18,10 @@ A user action that requires a **Slug** to proceed — currently *Save* and *Imag
 **Auto-Filled Field**:
 A user-owned **Post** field that, when left empty at *Save* time, is populated by an LLM as part of the Save flow. Currently **Slug**, **Description**, and **Hero Image**. Once filled, an **Auto-Filled Field** is a regular user-editable field — *the user can clear or overwrite it freely* — with one exception: **Slug** is locked permanently after first save. Clearing a **Description** or **Hero Image** then saving re-triggers **Auto-Fill**.
 
+**Category**:
+A single user-defined string label on a **Post** (e.g. `Blog`, `Signal`). User-defined: there is no fixed master list — the set of categories is the set of values present on existing **Posts**. The editor accepts free text with autocomplete sourced from existing values; the dashboard sidebar derives its Category section the same way. Always lowercase-normalised for matching, surface-cased for display.
+_Avoid_: Section, type, taxonomy
+
 **Description**:
 A 1–2 sentence Korean summary of a **Post**, surfaced in dashboard cards and (eventually) SEO meta tags. An **Auto-Filled Field** generated *synchronously* during *Save* from `Title + body` when empty (see ADR-0003).
 
